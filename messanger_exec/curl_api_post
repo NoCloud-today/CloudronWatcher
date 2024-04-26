@@ -1,0 +1,7 @@
+#!/bin/bash
+
+MESSAGE="$1"
+
+URL=$(grep 'URL_API_MESSANGER' "$PWD/.env" | cut -d'=' -f2-)
+
+eval "curl $URL"
