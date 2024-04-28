@@ -49,8 +49,9 @@ def get_cloudron_notifications() -> list:
     """
 
     if not cloudron_api_key or not cloudron_domain:
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sys.stderr.write(
-            "\033[41mConfiguration error: Check the CLOUDFRONT_TOKEN and CLOUDFRONT_DOMAIN environment variables.\033[0m\n")
+            f"\033[41mConfiguration error: Check the CLOUDFRONT_TOKEN and CLOUDFRONT_DOMAIN environment variables. Time: {current_time}\033[0m\n")
         sys.stderr.flush()
         return []
 
@@ -62,13 +63,15 @@ def get_cloudron_notifications() -> list:
         response.raise_for_status()
 
     except requests.exceptions.RequestException as e:
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sys.stderr.write(
-            f"\033[41mError receiving notifications: {e}\n\033[0m\n")
+            f"\033[41mError receiving notifications: {e}. Time: {current_time}\n\033[0m\n")
         sys.stderr.flush()
         return []
 
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     sys.stdout.write(
-        "\033[92mNotifications were successfully received via the Cloudron API\n\033[0m\n")
+        f"\033[92mNotifications were successfully received via the Cloudron API. Time: {current_time}\n\033[0m\n")
     sys.stdout.flush()
     return response.json()
 
@@ -86,8 +89,9 @@ def mark_notification_as_acknowledged(notification_id: str) -> None:
     """
 
     if not cloudron_api_key or not cloudron_domain:
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sys.stderr.write(
-            "\033[90mConfiguration error: Check the CLOUDRON_TOKEN and CLOUDRON_DOMAIN environment variables.\033[0m\n")
+            f"\033[90mConfiguration error: Check the CLOUDRON_TOKEN and CLOUDRON_DOMAIN environment variables. Time: {current_time}\033[0m\n")
         sys.stderr.flush()
         return
 
@@ -101,13 +105,15 @@ def mark_notification_as_acknowledged(notification_id: str) -> None:
         response.raise_for_status()
 
     except requests.exceptions.RequestException as e:
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sys.stderr.write(
-            f"\033[41mError when marking a notification as read: {e}\n\033[0m")
+            f"\033[41mError when marking a notification as read: {e}. Time: {current_time}\n\033[0m")
         sys.stderr.flush()
         return
 
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     sys.stdout.write(
-        f"\033[92mNotifications #{notification_id} have been successfully marked as read\n\033[0m\n")
+        f"\033[92mNotifications #{notification_id} have been successfully marked as read. Time: {current_time}\n\033[0m\n")
     sys.stdout.flush()
     return
 
@@ -137,12 +143,14 @@ if __name__ == '__main__':
                 bash_command_message, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
             if json.loads(process.stdout)['ok']:
+                current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 sys.stdout.write(
-                    f"\033[92m\nThe notification #{notification['id']} has been sent successfully.\n\033[0m{notification}\n")
+                    f"\033[92m\nThe notification #{notification['id']} has been sent successfully. Time: {current_time}\n\033[0m{notification}\n")
 
                 mark_notification_as_acknowledged(notification['id'])
 
             else:
+                current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 sys.stderr.write(
-                    f"\033[41mThe notification #{notification['id']} was not sent successfully.\n\033[0m")
+                    f"\033[41mThe notification #{notification['id']} was not sent successfully. Time: {current_time}\n\033[0m")
                 sys.stderr.write(f"\033[41m{process.stdout}\n\033[0m\n")
