@@ -7,12 +7,12 @@ Cloudron Monitor is a Python-based tool designed to enhance the monitoring capab
 ## Features
 
 - **Notification Fetching**: Automatically fetches notifications from Cloudron using the Cloudron API.
-- **Message Sending**: Sends unacknowledged notifications to a messaging service via a bash script.
+- **Message Sending**: Sends unacknowledged notifications to a messaging service via a cURL command.
 - **Notification Acknowledgement**: Marks notifications as acknowledged in Cloudron, ensuring that they are not reprocessed.
 
 ## Prerequisites
 
-- Python 3.x
+- Python 3.6+
 - Access to a Cloudron instance with API access enabled.
 - A messaging service that can receive messages via cURL.
 
@@ -33,20 +33,14 @@ cd cloudron-monitor
 pip install -r requirements.txt
 ```
 
-4. Create file `.env`
-```
-touch .env
-```
+4. Change the settings in the `setting.ini` file using the instructions provided in the accompanying file.
 
-5. Ensure that the `.env` file contains the necessary environment variables (`CLOUDRON_TOKEN` and `CLOUDRON_DOMAIN`).
-
-6. Add part of the curl command `URL_API_MESSANGER` to the `.env` file using the instructions in the file `.env_example`
 
 ## Usage
 
-To run the Cloudron Monitor, simply execute the `main.py` script:
+To run the Cloudron Monitor, simply execute the `cloudron_monitor.py` script:
 ```
-python main.py
+python cloudron_monitor.py
 ```
 
 This script does not require any command-line arguments. It will automatically fetch unacknowledged notifications from Cloudron, send them to the configured messaging service, and mark them as acknowledged in Cloudron.
