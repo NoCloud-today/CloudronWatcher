@@ -109,8 +109,8 @@ def curl_handler(process: subprocess.CompletedProcess) -> None:
     """
     Handles the response from a cURL command.
 
-    This method analyzes the output of the cURL command, checks the success of sending the notification, and if the notification
-    was successfully sent, marks it as read.
+    This method analyzes the output of the cURL command, checks the success of sending 
+    the notification, and if the notification was successfully sent, marks it as read.
 
     Parameters:
         process (subprocess.CompletedProcess): The result of the cURL command execution.
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     responses = get_cloudron_notifications()
 
     for notification in responses['notifications']:
-        if not notification['acknowledged']:
+        if notification['acknowledged']:
             message_content = message_template.replace(
                 "{id}", notification['id'])
             message_content = message_content.replace(
@@ -180,24 +180,24 @@ if __name__ == '__main__':
             message_content = message_content.replace(
                 "{MESSAGE}", notification['message'])
 
-        if "curl" in bash_command:
-            bash_command_message = bash_command.replace(
-                "{MESSAGE}", quote(message_content))
-        else:
-            bash_command_message = bash_command.replace(
-                "{MESSAGE}", message_content.replace('`', '\`'))
-
-        process = subprocess.run(
-            bash_command_message, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-        if process.returncode == 0:
             if "curl" in bash_command:
-                curl_handler(process)
+                bash_command_message = bash_command.replace(
+                    "{MESSAGE}", quote(message_content))
             else:
-                not_curl_handler(process)
+                bash_command_message = bash_command.replace(
+                    "{MESSAGE}", message_content.replace('`', '\`'))
 
-        else:
-            current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
-            sys.stderr.write(
-                f"\033[41mThe notification #{notification['id']} was not sent successfully. Time: {current_time}\n{process.stderr}\n\033[0m")
-            sys.stderr.flush()
+            process = subprocess.run(
+                bash_command_message, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            if process.returncode == 0:
+                if "curl" in bash_command:
+                    curl_handler(process)
+                else:
+                    not_curl_handler(process)
+
+            else:
+                current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
+                sys.stderr.write(
+                    f"\033[41mThe notification #{notification['id']} was not sent successfully. Time: {current_time}\n{process.stderr}\n\033[0m")
+                sys.stderr.flush()
