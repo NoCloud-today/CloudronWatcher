@@ -49,5 +49,66 @@ You can configure the script together with cron.
 
 All successful commands and errors are logged to the corresponding output streams: `stdout` for successful commands and `stderr` for errors. This ensures that the monitoring process is transparent and that any issues can be easily identified and addressed.
 
+## Example
+
+* Use `bin/echo` 
+
+    `settings.ini`
+    ```ini
+    NOTIFICATION_CMD=/bin/echo "{MESSAGE}" >> path/to/greetings.txt
+    NOTIFICATION_TEMPLATE=
+        Hello!
+        You have new notification No.{id}:
+        {title}
+        {MESSAGE}
+        The notification has been created {creationTime}
+        🚀
+    ```
+    `greetings.txt`
+    
+    ```
+    Hello!
+    You have new notification No.1:
+    Cloudron v7.7.2 installed
+    Cloudron v7.7.2 was installed.
+
+    Please join our community at https://forum.cloudron.io .
+
+    Changelog:
+    * OIDC avatar support via picture claim
+    * backupcleaner: fix bug where preserved backups were removed incorrectly
+    * directoryserver: cloudflare warning
+    * oidc/ldap: fix display name parsing to send anything after first name as the last name
+    * mail: Update haraka to 3.0.3
+    * mongodb: Update mongodb to 6.0
+    * acme: use secp256r1 curve for max compatibility
+    * add port range support
+    * docker: disable userland proxy
+    * oidc: always re-setup oidc client record
+    * mail: update solr to 8.11.3
+    * mail: spam acl should allow underscore and question mark
+    * Fix streaming of logs with `logPaths`
+    * profile: store user language setting in the database
+
+
+    The notification has been created 21 April 2024, 12:03:33
+    🚀
+    ```
+
+* Use Telegram API
+
+    `settings.ini`
+    ```ini
+    NOTIFICATION_CMD=curl -X POST "https://api.telegram.org/bot<your-bot-token>/sendMessage" -d  "chat_id=<your-chat-id>&text={MESSAGE}&parse_mode=HTML"
+    NOTIFICATION_TEMPLATE=
+        Hello!
+        You have new notification No.{id}:
+        <b>{title}</b>
+        {MESSAGE}
+        <i>The notification has been created {creationTime}</i>
+        🚀
+    ```
+
+
 ## License
 This project is licensed under the Apache License. See the `LICENSE` file for details.
