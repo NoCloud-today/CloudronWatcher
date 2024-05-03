@@ -2,12 +2,13 @@
 
 ## Overview
 
-Cloudron Monitor is a Python-based tool designed to enhance the monitoring capabilities of Cloudron instances. It facilitates the fetching of notifications from Cloudron, sending acknowledged notifications to a messaging service, and marking notifications as acknowledged in Cloudron. This project aims to provide a seamless way to keep track of the health and performance of Cloudron deployments, ensuring that users are informed about any important updates or issues.
+Cloudron Monitor is a Python-based tool designed to enhance the monitoring capabilities of cloud instances. It makes it easier to receive notifications from Cloudron, send confirmed notifications to the messaging service, and mark notifications as confirmed in Cloudron. The script also checks the status of applications and informs about errors. The goal of this project is to provide an easy way to track the health and performance of cloud deployments, ensuring that users are informed of any important updates or issues.
 
 ## Features
 
 - **Notification Fetching**: Automatically fetches notifications from Cloudron using the Cloudron API.
-- **Message Sending**: Sends unacknowledged notifications to a messaging service via a cURL command.
+- **Application status**: Automatically fetches a list of apps and check status from Cloudron using the Cloudron API.
+- **Message Sending**: Sends unacknowledged notifications and errors to a messaging service via a bash command.
 - **Notification Acknowledgement**: Marks notifications as acknowledged in Cloudron, ensuring that they are not reprocessed.
 
 ## Prerequisites
@@ -43,7 +44,7 @@ To run the Cloudron Monitor, simply execute the `cloudron_monitor.py` script:
 python cloudron_monitor.py
 ```
 
-This script does not require any command-line arguments. It will automatically fetch unacknowledged notifications from Cloudron, send them to the configured messaging service, and mark them as acknowledged in Cloudron.
+This script does not require any command-line arguments. It will automatically fetch unacknowledged notifications and application status from Cloudron. It send notifications to the configured messaging service, and mark them as acknowledged in Cloudron.
 
 You can configure the script together with cron.
 
@@ -67,6 +68,12 @@ All successful commands and errors are logged to the corresponding output stream
     `greetings.txt`
     
     ```
+    Application GitLab is not running
+
+    Application GitLab has an error:
+    Error: ...
+    Reason: FileSystem Error
+
     Hello!
     You have new notification No.1:
     Cloudron v7.7.2 installed

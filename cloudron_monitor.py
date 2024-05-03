@@ -2,12 +2,17 @@
 cloudron_monitor.py
 
 This script is a monitoring tool for Cloudron. 
-It is responsible for fetching notifications from Cloudron,
-sending unacknowledged notifications to a messaging service, 
-and marking notifications as acknowledged in Cloudron.
+It is responsible for:
+*   fetching notifications from Cloudron,
+    sending unacknowledged notifications to a messaging service, 
+    and marking notifications as acknowledged in Cloudron.
+    
+*   checking the running and error status of applications and
+    sending notifications about broken apps
 
 Features:
 - Retrieves notifications from the Cloudron.
+- Retrieves list of apps from the Cloudron.
 - Sends notifications using a command.
 - Marks notifications as acknowledged in the Cloudron.
 
@@ -70,6 +75,36 @@ def get_cloudron_notifications() -> list:
     return response.json()
 
 
+def get_apps() -> list:
+    """
+    Fetches a list of applications from the Cloudron API.
+
+    This function fetches a list of applications from the Cloudron API using the API key and domain specified in the environment variables.
+    If the API call is successful, it prints a success message to stdout. In case of an error, it prints an error message to stderr.
+    Returns:
+        list: A list of applications in JSON format, obtained from the Cloudron API.
+    """
+    url = f"https://{cloudron_domain}/api/v1/apps"
+    headers = {'Authorization': f'Bearer {cloudron_api_key}'}
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+
+    except requests.exceptions.RequestException as e:
+        current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        sys.stderr.write(
+            f"\033[41mError when receiving the application list: {e}. Time: {current_time}\n\033[0m")
+        sys.stderr.flush()
+        exit(1)
+
+    current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
+    sys.stdout.write(
+        f"\033[92mThe application list was successfully received. Time: {current_time}\n\033[0m\n")
+    sys.stdout.flush()
+    return response.json()
+
+
 def mark_notification_as_acknowledged(notification_id: str) -> None:
     """
     Marks a specific notification as acknowledged in the Cloudron API.
@@ -105,60 +140,149 @@ def mark_notification_as_acknowledged(notification_id: str) -> None:
     return
 
 
-def curl_handler(process: subprocess.CompletedProcess) -> None:
+def message_update_template(notification) -> str:
     """
-    Handles the response from a cURL command.
+    Updates a message template with the details of a notification.
 
-    This method analyzes the output of the cURL command, checks the success of sending 
-    the notification, and if the notification was successfully sent, marks it as read.
+    This function takes a notification object and replaces placeholders in the message template with the actual notification details.
+    The placeholders in the template are replaced with the notification's ID, title, creation time, and message content.
 
     Parameters:
-        process (subprocess.CompletedProcess): The result of the cURL command execution.
+    - notification (dict): A dictionary containing the notification details. Expected keys are:
+        - 'id' (str): The unique identifier of the notification.
+        - 'title' (str): The title of the notification.
+        - 'creationTime' (str): The creation time of the notification in ISO 8601 format.
+        - 'message' (str): The message content of the notification.
+
+    Returns:
+    - str: A formatted string with the updated message template, incorporating the notification's details.
+    """
+    message_content = message_template.replace(
+        "{id}", notification['id'])
+    message_content = message_content.replace(
+        "{title}", notification['title'])
+    message_content = message_content.replace(
+        "{creationTime}", datetime.fromisoformat(
+            notification['creationTime'].replace("Z", "+00:00")).strftime("%d %B %Y, %H:%M:%S"))
+    message_content = message_content.replace(
+        "{MESSAGE}", notification['message'])
+    return message_content
+
+
+def curl_handler(process: subprocess.CompletedProcess, message_type: str = "notification") -> bool:
+    """
+    Handles the response from the messaging service when using cURL for sending messages.
+
+    This function processes the output of a subprocess call that sends a message using cURL. It checks if the message was sent successfully by parsing the JSON response.
+    If the message was sent successfully, it prints a success message to stdout. In case of an error, it prints an error message to stderr.
+
+    Parameters:
+    - process (subprocess.CompletedProcess): The completed process object returned by the subprocess call.
+    - message_type (str): The type of message being sent. Defaults to "notification".
+
+    Returns:
+    - bool: True if the message was sent successfully, False otherwise.
     """
     try:
         json_data = json.loads(process.stdout)
 
         if json_data['ok']:
             current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
-            sys.stdout.write(
-                f"\033[92m\nThe notification #{notification['id']} has been sent successfully. Time: {current_time}\n\033[0m{notification}\n")
-            sys.stdout.flush()
+            if message_type == "notification":
+                sys.stdout.write(
+                    f"\033[92m\nThe notification has been sent successfully. Time: {current_time}\n\033[0m")
+            elif message_type == "running status":
+                sys.stdout.write(
+                    f"\033[92m\nInformation about the app not running has been sent successfully. Time: {current_time}\n\033[0m")
+            elif message_type == "error status":
+                sys.stdout.write(
+                    f"\033[92m\nInformation about the app's error has been successfully sent. Time: {current_time}\n\033[0m")
 
-            mark_notification_as_acknowledged(notification['id'])
+            sys.stdout.flush()
 
         else:
             current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
             sys.stderr.write(
-                f"\033[41mThe notification #{notification['id']} was not sent successfully. Time: {current_time}\n{process.stdout}\n\033[0m")
+                f"\033[nInformation about {message_type} was not sent successfully. Time: {current_time}\n{process.stdout}\n\033[0m")
             sys.stderr.flush()
+            return False
 
     except json.JSONDecodeError:
         current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
         sys.stderr.write(
-            f"\033[41mThe notification #{notification['id']} was not sent successfully. Time: {current_time}\nNOTIFICATION_CMD error: Check the curl cmd. \n\033[0m")
+            f"\033[41mInformation about {message_type} was not sent successfully. Time: {current_time}\nNOTIFICATION_CMD error: Check the curl cmd. \n\033[0m")
         sys.stderr.flush()
+        return False
+
+    return True
 
 
-def not_curl_handler(process: subprocess.CompletedProcess) -> None:
+def not_curl_handler(process: subprocess.CompletedProcess, message_type: str = "notification") -> bool:
     """
-    Handles the response from a command not using cURL.
+    Handles the response from the messaging service when not using cURL for sending messages.
 
-    This method is intended for handling responses from commands that do not use cURL to send notifications. It analyzes
-    the command output, assuming the successful sending of the notification, and marks it as read.
+    This function processes the output of a subprocess call that sends a message without using cURL. It checks the return code of the subprocess call to determine if the message was sent successfully.
+    If the message was sent successfully, it prints a success message to stdout. In case of an error, it prints an error message to stderr.
 
     Parameters:
-        process (subprocess.CompletedProcess): The result of the command execution.
-    """
-    current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
-    sys.stdout.write(
-        f"\033[92m\nThe notification #{notification['id']} has been sent successfully. Time: {current_time}\n\033[0m{notification}\n")
-    sys.stdout.flush()
+    - process (subprocess.CompletedProcess): The completed process object returned by the subprocess call.
+    - message_type (str): The type of message being sent. Defaults to "notification".
 
-    mark_notification_as_acknowledged(notification['id'])
+    Returns:
+    - bool: True if the message was sent successfully, False otherwise.
+    """
+    if process.returncode == 0:
+        current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        if message_type == "notification":
+            sys.stdout.write(
+                f"\033[92m\nThe notification has been sent successfully. Time: {current_time}\n\033[0m")
+        elif message_type == "running status":
+            sys.stdout.write(
+                f"\033[92m\nInformation about the app not running has been sent successfully. Time: {current_time}\n\033[0m")
+        elif message_type == "error status":
+            sys.stdout.write(
+                f"\033[92m\nInformation about the app's error has been successfully sent. Time: {current_time}\n\033[0m")
+
+        sys.stdout.flush()
+        return True
+
+    else:
+        current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        sys.stderr.write(
+            f"\033[41mInformation about {message_type} was not sent successfully. Time: {current_time}\n{process.stderr}\n\033[0m")
+        sys.stderr.flush()
+        return False
+
+
+def send_notification(message: str, message_type: str = "notification") -> bool:
+    """
+    Sends a notification message to the configured messaging service.
+
+    This function prepares the message for sending by replacing placeholders in the command specified in the configuration file with the actual message content.
+    It then executes the command using a subprocess call. The function uses either `curl_handler` or `not_curl_handler` to process the response from the messaging service,
+    depending on whether the command includes "curl".
+
+    Parameters:
+    - message (str): The message content to be sent.
+    - message_type (str): The type of message being sent. Defaults to "notification".
+
+    Returns:
+    - bool: True if the message was sent successfully, False otherwise.
+    """
+    if "curl" in bash_command:
+        bash_command_message = bash_command.replace(
+            "{MESSAGE}", quote(message))
+    else:
+        bash_command_message = bash_command.replace(
+            "{MESSAGE}", message.replace('`', '\`'))
+
+    process = subprocess.run(
+        bash_command_message, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    return curl_handler(process, message_type) if "curl" in bash_command else not_curl_handler(process, message_type)
 
 
 if __name__ == '__main__':
-
     if not cloudron_api_key or not cloudron_domain or not bash_command:
         current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
         sys.stderr.write(
@@ -166,38 +290,25 @@ if __name__ == '__main__':
         sys.stderr.flush()
         exit(1)
 
-    responses = get_cloudron_notifications()
+    list_apps = get_apps()
 
-    for notification in responses['notifications']:
-        if notification['acknowledged']:
-            message_content = message_template.replace(
-                "{id}", notification['id'])
-            message_content = message_content.replace(
-                "{title}", notification['title'])
-            message_content = message_content.replace(
-                "{creationTime}", datetime.fromisoformat(
-                    notification['creationTime'].replace("Z", "+00:00")).strftime("%d %B %Y, %H:%M:%S"))
-            message_content = message_content.replace(
-                "{MESSAGE}", notification['message'])
+    for app in list_apps['apps']:
+        if app['runState'] != 'running':
+            message = f"""Application {app['manifest']['title']} is not running"""
+            send_notification(message, "running status")
 
-            if "curl" in bash_command:
-                bash_command_message = bash_command.replace(
-                    "{MESSAGE}", quote(message_content))
-            else:
-                bash_command_message = bash_command.replace(
-                    "{MESSAGE}", message_content.replace('`', '\`'))
+        if not app['error'] is None:
+            message = f"""Application {app['manifest']['title']} has an error:\nError: {app['error']['message']}\nReason: {app['error']['reason']}"""
+            send_notification(message, "error status")
 
-            process = subprocess.run(
-                bash_command_message, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    list_notifications = get_cloudron_notifications()
 
-            if process.returncode == 0:
-                if "curl" in bash_command:
-                    curl_handler(process)
-                else:
-                    not_curl_handler(process)
+    for notification in list_notifications['notifications']:
+        if not notification['acknowledged']:
+            message = message_update_template(notification)
+            send_status = send_notification(message)
 
-            else:
-                current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
-                sys.stderr.write(
-                    f"\033[41mThe notification #{notification['id']} was not sent successfully. Time: {current_time}\n{process.stderr}\n\033[0m")
-                sys.stderr.flush()
+            if send_status:
+                sys.stdout.write(f"{notification}\n")
+                sys.stdout.flush()
+                mark_notification_as_acknowledged(notification['id'])
