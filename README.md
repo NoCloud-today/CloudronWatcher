@@ -10,11 +10,12 @@ cd cloudron-monitor
 python3 -m venv env
 source env/bin/activate
 pip install -r requirements.txt
-chmod +x cloudron-monitor.sh
-vi settings.ini # specify the way message get delivered; Telegram is provided by default
-./cloudron-monitor.sh
+chmod +x cloudron_monitor.sh
+vi settings.ini
+./cloudron_monitor.sh
 ```
+
 An example crontab entry:
 ```crontab
-*/5 * * * * python3 /home/user/cloudron_monitor/cloudron_monitor.sh
+*/5 * * * * python3 /.../cloudron_monitor/cloudron_monitor.sh
 ```
