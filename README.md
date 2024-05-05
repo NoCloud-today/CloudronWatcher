@@ -18,9 +18,3 @@ An example crontab entry:
 ```crontab
 */5 * * * * python3 /home/user/cloudron_monitor/cloudron_monitor.sh
 ```
-        🚀
-    ```
-
-
-## License
-This project is licensed under the Apache License. See the `LICENSE` file for details.
