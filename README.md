@@ -15,10 +15,9 @@ vi settings.ini # specify the way message get delivered; Telegram is provided by
 ./cloudron-monitor.sh
 ```
 An example crontab entry:
-```
+```crontab
 */5 * * * * python3 /home/user/cloudron_monitor/cloudron_monitor.sh
 ```
-        <i>The notification has been created {creationTime}</i>
         🚀
     ```
 
