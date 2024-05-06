@@ -1,12 +1,12 @@
 """
 cloudron_monitor.py
 
-This script is a monitoring tool for Cloudron. 
+This script is a monitoring tool for Cloudron.
 It is responsible for:
 *   fetching notifications from Cloudron,
-    sending unacknowledged notifications to a messaging service, 
+    sending unacknowledged notifications to a messaging service,
     and marking notifications as acknowledged in Cloudron.
-    
+
 *   checking the running and error status of applications and
     sending notifications about broken apps
 
@@ -35,10 +35,10 @@ from urllib.parse import quote
 from datetime import datetime
 
 config = configparser.ConfigParser()
-config.read("settings.ini")
+config.read('settings.ini')
 
 cloudron_api_key = config['MAIN']['CLOUDRON_TOKEN']
-cloudron_domain = config['MAIN']["CLOUDRON_DOMAIN"]
+cloudron_domain = config['MAIN']['CLOUDRON_DOMAIN']
 bash_command = config['MAIN']['NOTIFICATION_CMD']
 message_template = config['MAIN']['NOTIFICATION_TEMPLATE']
 
@@ -62,17 +62,15 @@ def get_cloudron_notifications() -> list:
         response.raise_for_status()
 
     except requests.exceptions.RequestException as e:
-        current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
         sys.stderr.write(
-            f"\033[41mError receiving notifications: {e}. Time: {current_time}\n\033[0m\n")
+            f"\033[Error receiving notifications: {e}.\033[0m\n")
         sys.stderr.flush()
         exit(1)
 
-    current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
     sys.stdout.write(
-        f"\033[92mNotifications were successfully received via the Cloudron API. Time: {current_time}\n\033[0m\n")
+        f"\033[92mNotifications were successfully received via the Cloudron API.\033[0m\n")
     sys.stdout.flush()
-    return response.json()
+    return sorted(response.json()['notifications'], key=lambda x: x['creationTime'])
 
 
 def get_apps() -> list:
@@ -92,16 +90,11 @@ def get_apps() -> list:
         response.raise_for_status()
 
     except requests.exceptions.RequestException as e:
-        current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
         sys.stderr.write(
-            f"\033[41mError when receiving the application list: {e}. Time: {current_time}\n\033[0m")
+            f"\033[mError when receiving the application list: {e}.\033[0m")
         sys.stderr.flush()
         exit(1)
 
-    current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
-    sys.stdout.write(
-        f"\033[92mThe application list was successfully received. Time: {current_time}\n\033[0m\n")
-    sys.stdout.flush()
     return response.json()
 
 
@@ -127,15 +120,13 @@ def mark_notification_as_acknowledged(notification_id: str) -> None:
         response.raise_for_status()
 
     except requests.exceptions.RequestException as e:
-        current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
         sys.stderr.write(
-            f"\033[41mError when marking a notification as read: {e}. Time: {current_time}\n\033[0m")
+            f"\033[mError when marking a notification as read: {e}.\033[0m")
         sys.stderr.flush()
         return
 
-    current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
     sys.stdout.write(
-        f"\033[92mNotifications #{notification_id} have been successfully marked as read. Time: {current_time}\n\033[0m\n")
+        f"\033[92mNotifications #{notification_id} have been successfully marked as read.\033[0m\n")
     sys.stdout.flush()
     return
 
@@ -169,7 +160,7 @@ def message_update_template(notification) -> str:
     return message_content
 
 
-def curl_handler(process: subprocess.CompletedProcess, message_type: str = "notification") -> bool:
+def curl_handler(process: subprocess.CompletedProcess, id: str, message_type: str = 'notification') -> bool:
     """
     Handles the response from the messaging service when using cURL for sending messages.
 
@@ -178,6 +169,7 @@ def curl_handler(process: subprocess.CompletedProcess, message_type: str = "noti
 
     Parameters:
     - process (subprocess.CompletedProcess): The completed process object returned by the subprocess call.
+    - id (str): The notification number or application name
     - message_type (str): The type of message being sent. Defaults to "notification".
 
     Returns:
@@ -187,37 +179,34 @@ def curl_handler(process: subprocess.CompletedProcess, message_type: str = "noti
         json_data = json.loads(process.stdout)
 
         if json_data['ok']:
-            current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
-            if message_type == "notification":
+            if message_type == 'notification':
                 sys.stdout.write(
-                    f"\033[92m\nThe notification has been sent successfully. Time: {current_time}\n\033[0m")
-            elif message_type == "running status":
+                    f"\033[92mThe notification #{id} has been sent successfully.\033[0m\n")
+            elif message_type == 'running status':
                 sys.stdout.write(
-                    f"\033[92m\nInformation about the app not running has been sent successfully. Time: {current_time}\n\033[0m")
-            elif message_type == "error status":
+                    f"\033[92mInformation about {id} not running has been sent successfully.\033[0m\n")
+            elif message_type == 'error status':
                 sys.stdout.write(
-                    f"\033[92m\nInformation about the app's error has been successfully sent. Time: {current_time}\n\033[0m")
+                    f"\033[92mInformation about {id}'s error has been successfully sent.\033[0m\n")
 
             sys.stdout.flush()
 
         else:
-            current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
             sys.stderr.write(
-                f"\033[nInformation about {message_type} was not sent successfully. Time: {current_time}\n{process.stdout}\n\033[0m")
+                f"\033[mInformation about {message_type} ({id}) was not sent successfully.\n{process.stdout}\033[0m\n")
             sys.stderr.flush()
             return False
 
     except json.JSONDecodeError:
-        current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
         sys.stderr.write(
-            f"\033[41mInformation about {message_type} was not sent successfully. Time: {current_time}\nNOTIFICATION_CMD error: Check the curl cmd. \n\033[0m")
+            f"\033[mInformation about {message_type} ({id}) was not sent successfully: NOTIFICATION_CMD error: Check the curl cmd.\033[0m\n")
         sys.stderr.flush()
         return False
 
     return True
 
 
-def not_curl_handler(process: subprocess.CompletedProcess, message_type: str = "notification") -> bool:
+def not_curl_handler(process: subprocess.CompletedProcess, id: str, message_type: str = 'notification') -> bool:
     """
     Handles the response from the messaging service when not using cURL for sending messages.
 
@@ -226,35 +215,34 @@ def not_curl_handler(process: subprocess.CompletedProcess, message_type: str = "
 
     Parameters:
     - process (subprocess.CompletedProcess): The completed process object returned by the subprocess call.
+    - id (str): The notification number or application name
     - message_type (str): The type of message being sent. Defaults to "notification".
 
     Returns:
     - bool: True if the message was sent successfully, False otherwise.
     """
     if process.returncode == 0:
-        current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
-        if message_type == "notification":
+        if message_type == 'notification':
             sys.stdout.write(
-                f"\033[92m\nThe notification has been sent successfully. Time: {current_time}\n\033[0m")
-        elif message_type == "running status":
+                f"\033[92mThe notification #{id} has been sent successfully.\033[0m\n")
+        elif message_type == 'running status':
             sys.stdout.write(
-                f"\033[92m\nInformation about the app not running has been sent successfully. Time: {current_time}\n\033[0m")
-        elif message_type == "error status":
+                f"\033[92mInformation about {id} not running has been sent successfully.\033[0m\n")
+        elif message_type == 'error status':
             sys.stdout.write(
-                f"\033[92m\nInformation about the app's error has been successfully sent. Time: {current_time}\n\033[0m")
+                f"\033[92mInformation about {id}'s error has been successfully sent.\033[0m\n")
 
         sys.stdout.flush()
         return True
 
     else:
-        current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
         sys.stderr.write(
-            f"\033[41mInformation about {message_type} was not sent successfully. Time: {current_time}\n{process.stderr}\n\033[0m")
+            f"\033[mInformation about {message_type} ({id}) was not sent successfully.\n{process.stderr}\033[0m\n")
         sys.stderr.flush()
         return False
 
 
-def send_notification(message: str, message_type: str = "notification") -> bool:
+def send_notification(message: str, id: str, message_type: str = 'notification') -> bool:
     """
     Sends a notification message to the configured messaging service.
 
@@ -264,6 +252,7 @@ def send_notification(message: str, message_type: str = "notification") -> bool:
 
     Parameters:
     - message (str): The message content to be sent.
+    - id (str): The notification number or application name
     - message_type (str): The type of message being sent. Defaults to "notification".
 
     Returns:
@@ -279,36 +268,61 @@ def send_notification(message: str, message_type: str = "notification") -> bool:
     process = subprocess.run(
         bash_command_message, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    return curl_handler(process, message_type) if "curl" in bash_command else not_curl_handler(process, message_type)
+    return curl_handler(process, id.strip('{\'}'), message_type) if 'curl' in bash_command else not_curl_handler(
+        process, id.strip('{\'}'), message_type)
 
 
 if __name__ == '__main__':
+    current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
     if not cloudron_api_key or not cloudron_domain or not bash_command:
-        current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
         sys.stderr.write(
-            f"\033[41mConfiguration error: Check the environment variables. Time: {current_time}\033[0m\n")
+            f"\033[mTime: {current_time}.\nConfiguration error: Check the environment variables.\033[0m\n")
         sys.stderr.flush()
         exit(1)
 
+    sys.stdout.write(f"Time: {current_time}.\n")
+    sys.stdout.flush()
+
     list_apps = get_apps()
+    count_error_apps = 0
+    count_not_running_apps = 0
 
     for app in list_apps['apps']:
         if app['runState'] != 'running':
-            message = f"""Application {app['manifest']['title']} is not running"""
-            send_notification(message, "running status")
+            message = f"Application {app['manifest']['title']} is not running"
+            send_notification(message, str({app['manifest']['title']}), 'running status')
+            count_not_running_apps += 1
 
         if not app['error'] is None:
             message = f"""Application {app['manifest']['title']} has an error:\nError: {app['error']['message']}\nReason: {app['error']['reason']}"""
-            send_notification(message, "error status")
+            send_notification(message, str({app['manifest']['title']}), 'error status')
+            count_error_apps += 1
+
+    ending = 's status have' if len(list_apps['apps']) > 1 else ' status has'
+    ending_err = 's' if count_error_apps > 1 else ''
+    ending_run = 's are' if count_not_running_apps > 1 else ' is'
+    sys.stdout.write(
+        f"{len(list_apps['apps'])} application{ending} been checked: {count_error_apps} app{ending_err} with "
+        f"error, {count_not_running_apps} app{ending_run} not working.\n")
 
     list_notifications = get_cloudron_notifications()
+    count_unread = 0
+    count_send = 0
 
-    for notification in list_notifications['notifications']:
+    for notification in list_notifications:
         if not notification['acknowledged']:
+            count_unread += 1
             message = message_update_template(notification)
-            send_status = send_notification(message)
+            send_status = send_notification(message, notification['id'])
 
             if send_status:
+                count_send += 1
                 sys.stdout.write(f"{notification}\n")
                 sys.stdout.flush()
                 mark_notification_as_acknowledged(notification['id'])
+
+    ending = 's have' if len(list_notifications) > 1 else ' has'
+    ending_unread = 's' if count_unread > 1 else ''
+    ending_send = 's were' if count_send > 1 else ' was'
+    sys.stdout.write(
+        f"{len(list_notifications)} notification{ending} been checked: {count_unread} notification{ending_unread} unread, {count_send} notification{ending_send} successfully sent.\n")
