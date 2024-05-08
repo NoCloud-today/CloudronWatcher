@@ -36,6 +36,7 @@ import requests
 from urllib.parse import quote
 from datetime import datetime
 
+
 def is_debug_mode() -> bool:
     """
     Checks if the script is running in debug mode.
@@ -44,6 +45,7 @@ def is_debug_mode() -> bool:
     - bool: True if the script is running in debug mode, False otherwise.
     """
     return '--debug' in sys.argv
+
 
 def get_config():
     """
@@ -166,7 +168,7 @@ def get_apps(cloudron_domain: str, cloudron_api_key: str) -> list:
 
 
 def mark_notification_as_acknowledged(
-    cloudron_domain: str, cloudron_api_key: str, notification_id: str
+        cloudron_domain: str, cloudron_api_key: str, notification_id: str
 ) -> None:
     """
     Marks a specific notification as acknowledged in the Cloudron API.
@@ -226,7 +228,7 @@ def message_update_template(message_template: str, notification) -> str:
 
 
 def curl_handler(
-    process: subprocess.CompletedProcess, id: str, message_type: str = "notification"
+        process: subprocess.CompletedProcess, id: str, message_type: str = "notification"
 ) -> bool:
     """
     Handles the response from the messaging service when using cURL for sending messages.
@@ -279,7 +281,7 @@ def curl_handler(
 
 
 def not_curl_handler(
-    process: subprocess.CompletedProcess, id: str, message_type: str = "notification"
+        process: subprocess.CompletedProcess, id: str, message_type: str = "notification"
 ) -> bool:
     """
     Handles the response from the messaging service when not using cURL for sending messages.
@@ -321,7 +323,7 @@ def not_curl_handler(
 
 
 def send_notification(
-    bash_command: str, message: str, id: str, message_type: str = "notification"
+        bash_command: str, message: str, id: str, message_type: str = "notification"
 ) -> bool:
     """
     Sends a notification message using a specified command.
@@ -365,6 +367,7 @@ if __name__ == "__main__":
         bash_command,
         message_template,
     ) = get_config()
+
     current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
     if not bash_command or not message_template:
