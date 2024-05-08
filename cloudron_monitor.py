@@ -29,6 +29,7 @@ Usage:
 
 import configparser
 import json
+import os
 import subprocess
 import sys
 import requests
@@ -64,9 +65,22 @@ def get_config():
         - message_template (str): The template for the notification messages.
     """
     config = configparser.ConfigParser()
-    config.read("settings.ini")
-    bash_command = config["NOTIFICATION"]["NOTIFICATION_CMD"]
-    message_template = config["NOTIFICATION"]["NOTIFICATION_TEMPLATE"]
+
+    if not os.path.exists("settings.ini"):
+        sys.stderr.write(f"\033[mError: The configuration file 'settings.ini' does not exist.\033[0m\n")
+        sys.stderr.flush()
+        exit(1)
+
+    try:
+        config.read("settings.ini")
+        bash_command = config["NOTIFICATION"]["NOTIFICATION_CMD"]
+        message_template = config["NOTIFICATION"]["NOTIFICATION_TEMPLATE"]
+    except KeyError as e:
+        sys.stderr.write(
+            f"\033[mConfiguration error: Check the environment variables: {e}.\033[0m\n"
+        )
+        sys.stderr.flush()
+        exit(1)
     cloudron_api_key = []
     cloudron_domain = []
     cloudron_title = []
