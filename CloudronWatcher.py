@@ -1,5 +1,5 @@
 """
-cloudron_monitor.py
+CloudronWatcher.py
 
 This script is a monitoring tool for Cloudron.
 It is responsible for:
@@ -77,40 +77,63 @@ def get_config():
         config.read("settings.ini")
         bash_command = config["NOTIFICATION"]["NOTIFICATION_CMD"]
         message_template = config["NOTIFICATION"]["NOTIFICATION_TEMPLATE"]
+
+        if bash_command == '':
+            sys.stderr.write(
+                f"\033[mConfiguration error: Check the environment variables: NOTIFICATION_CMD.\033[0m\n"
+            )
+            sys.stderr.flush()
+            exit(1)
+
+        if message_template == '':
+            sys.stderr.write(
+                f"\033[mConfiguration error: Check the environment variables: NOTIFICATION_TEMPLATE.\033[0m\n"
+            )
+            sys.stderr.flush()
+            exit(1)
+
     except KeyError as e:
         sys.stderr.write(
             f"\033[mConfiguration error: Check the environment variables: {e}.\033[0m\n"
         )
         sys.stderr.flush()
         exit(1)
-    cloudron_api_key = []
-    cloudron_domain = []
-    cloudron_title = []
+
+    cloudron_instances = {}
 
     for section in config.sections():
         for key in config[section]:
             if key.startswith("cloudron_domain"):
-                cloudron_domain.append(config[section]["CLOUDRON_DOMAIN"])
-            elif key.startswith("cloudron_token"):
-                cloudron_api_key.append(config[section]["CLOUDRON_TOKEN"])
-                cloudron_title.append(section)
+                try:
+                    if config[section]["CLOUDRON_DOMAIN"] == '' or config[section]["CLOUDRON_TOKEN"] == '':
+                        sys.stderr.write(
+                            f"\033[33mWarning: The environment variable of {section} is empty. It will be "
+                            f"skipped.\033[0m\n"
+                        )
+                        sys.stderr.flush()
+                    else:
+                        cloudron_instances[section] = [config[section]["CLOUDRON_DOMAIN"],
+                                                       config[section]["CLOUDRON_TOKEN"]]
+                except KeyError as e:
+                    sys.stderr.write(
+                        f"\033[mConfiguration error: Check the environment variables: {e}.\033[0m\n"
+                    )
+                    sys.stderr.flush()
+                    exit(1)
 
     return (
-        cloudron_title,
-        cloudron_domain,
-        cloudron_api_key,
+        cloudron_instances,
         bash_command,
         message_template,
     )
 
 
-def get_cloudron_notifications(cloudron_domain: str, cloudron_api_key: str) -> list:
+def get_cloudron_notifications(cloudron_instance: list) -> list:
     """
     Fetches a list of notifications from the Cloudron API.
 
     Parameters:
-    - cloudron_domain (str): The domain of the Cloudron instance from which to fetch notifications.
-    - cloudron_api_key (str): The API token for accessing the Cloudron instance.
+    - cloudron_instance: Pair (domain, api-key).
 
     Returns:
     - list: A list of notifications in JSON format, obtained from the Cloudron API. The list is sorted by the 'creationTime' attribute of each notification.
@@ -118,31 +141,28 @@ def get_cloudron_notifications(cloudron_domain: str, cloudron_api_key: str) -> l
     Raises:
     - requests.exceptions.RequestException: If there is an error with the request to the Cloudron API.
     """
-    headers = {"Authorization": f"Bearer {cloudron_api_key}"}
-    url = f"https://{cloudron_domain}/api/v1/notifications"
+
+    headers = {"Authorization": f"Bearer {cloudron_instance[1]}"}
+    url = f"https://{cloudron_instance[0]}/api/v1/notifications"
 
     try:
         response = requests.get(url, headers=headers)
         response.raise_for_status()
 
     except requests.exceptions.RequestException as e:
-        sys.stderr.write(f"\033[Error receiving notifications: {e}.\033[0m\n")
+        sys.stderr.write(f"\033[mError receiving notifications: {e}.\033[0m\n")
         sys.stderr.flush()
         return []
 
-    # sys.stdout.write(
-    #     f"\033[92mNotifications were successfully received via the Cloudron API.\033[0m\n")
-    # sys.stdout.flush()
     return sorted(response.json()["notifications"], key=lambda x: x["creationTime"])
 
 
-def get_apps(cloudron_domain: str, cloudron_api_key: str) -> list:
+def get_apps(cloudron_instance: list) -> list:
     """
     Retrieves a list of applications from the Cloudron API.
 
     Parameters:
-    - cloudron_domain (str): The domain of the Cloudron instance from which to fetch the list of applications.
-    - cloudron_api_key (str): The API token for accessing the Cloudron instance.
+    - cloudron_instance: Pair (domain, api-key).
 
     Returns:
     - list: A list of applications in JSON format, obtained from the Cloudron API.
@@ -150,8 +170,8 @@ def get_apps(cloudron_domain: str, cloudron_api_key: str) -> list:
     Raises:
     - requests.exceptions.RequestException: If there is an error with the request to the Cloudron API.
     """
-    url = f"https://{cloudron_domain}/api/v1/apps"
-    headers = {"Authorization": f"Bearer {cloudron_api_key}"}
+    url = f"https://{cloudron_instance[0]}/api/v1/apps"
+    headers = {"Authorization": f"Bearer {cloudron_instance[1]}"}
 
     try:
         response = requests.get(url, headers=headers)
@@ -167,24 +187,21 @@ def get_apps(cloudron_domain: str, cloudron_api_key: str) -> list:
     return response.json()
 
 
-def mark_notification_as_acknowledged(
-        cloudron_domain: str, cloudron_api_key: str, notification_id: str
-) -> None:
+def mark_notification_as_acknowledged(cloudron_instance: list, notification_id: str) -> None:
     """
     Marks a specific notification as acknowledged in the Cloudron API.
 
     Parameters:
-    - cloudron_domain (str): The domain of the Cloudron instance where the notification is located.
-    - cloudron_api_key (str): The API token for accessing the Cloudron instance.
+    - cloudron_instance: Pair (domain, api-key).
     - notification_id (str): The unique identifier of the notification to be marked as acknowledged.
 
     Raises:
     - requests.exceptions.RequestException: If there is an error with the request to the Cloudron API, such as network issues or invalid credentials.
     """
-    headers = {"Authorization": f"Bearer {cloudron_api_key}"}
+    headers = {"Authorization": f"Bearer {cloudron_instance[1]}"}
     data = {"acknowledged": True}
 
-    url = f"https://{cloudron_domain}/api/v1/notifications/{notification_id}"
+    url = f"https://{cloudron_instance[0]}/api/v1/notifications/{notification_id}"
 
     try:
         response = requests.post(url, headers=headers, json=data)
@@ -227,9 +244,7 @@ def message_update_template(message_template: str, notification) -> str:
     return message_content
 
 
-def curl_handler(
-        process: subprocess.CompletedProcess, id: str, message_type: str = "notification"
-) -> bool:
+def curl_handler(process: subprocess.CompletedProcess, id: str, message_type: str = "notification") -> bool:
     """
     Handles the response from the messaging service when using cURL for sending messages.
 
@@ -246,6 +261,9 @@ def curl_handler(
     """
     try:
         json_data = json.loads(process.stdout)
+
+        sys.stdout.write(json.dumps(json_data, indent=4))
+        sys.stdout.flush()
 
         if json_data["ok"]:
             if message_type == "notification":
@@ -280,9 +298,7 @@ def curl_handler(
     return True
 
 
-def not_curl_handler(
-        process: subprocess.CompletedProcess, id: str, message_type: str = "notification"
-) -> bool:
+def not_curl_handler(process: subprocess.CompletedProcess, id: str, message_type: str = "notification") -> bool:
     """
     Handles the response from the messaging service when not using cURL for sending messages.
 
@@ -322,9 +338,7 @@ def not_curl_handler(
         return False
 
 
-def send_notification(
-        bash_command: str, message: str, id: str, message_type: str = "notification"
-) -> bool:
+def send_notification(bash_command: str, message: str, id: str, message_type: str = "notification") -> bool:
     """
     Sends a notification message using a specified command.
 
@@ -358,121 +372,95 @@ def send_notification(
     )
 
 
-if __name__ == "__main__":
-
-    (
-        cloudron_title,
-        cloudron_domain,
-        cloudron_api_key,
-        bash_command,
-        message_template,
-    ) = get_config()
+if __name__ == '__main__':
+    cloudron_instances, bash_command, message_template = get_config()
 
     current_time = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
-
-    if not bash_command or not message_template:
-        sys.stderr.write(
-            f"\033[mTime: {current_time}.\nConfiguration error: Check the NOTIFICATION variables.\033[0m\n"
-        )
-        sys.stderr.flush()
-        exit(1)
 
     sys.stdout.write(f"Time: {current_time}.\n")
     sys.stdout.flush()
 
-    for i in range(len(cloudron_api_key)):
-        sys.stdout.write(f"Checking the instance - {cloudron_title[i]}\n")
+    for title, cloudron_instance in cloudron_instances.items():
+
+        sys.stdout.write(f"Checking the instance - {title}\n")
         sys.stdout.flush()
 
-        if not cloudron_api_key[i] or not cloudron_domain[i]:
-            sys.stderr.write(
-                f"\033[mConfiguration error: Check the environment variables.\033[0m\n"
-            )
-            sys.stderr.flush()
-            continue
-
-        list_apps = get_apps(cloudron_domain[i], cloudron_api_key[i])
+        list_apps = get_apps(cloudron_instance)
 
         count_app = {"error": 0, "not_running": 0, "send": 0}
 
-        if list_apps == []:
-            continue
+        if list_apps != []:
+            for app in list_apps["apps"]:
+                if app["runState"] != "running":
+                    message = f"{title}\nApplication {app['manifest']['title']} is not running"
+                    send_app = send_notification(
+                        bash_command,
+                        message,
+                        str({app["manifest"]["title"]}),
+                        "running status",
+                    )
+                    count_app["not_running"] += 1
 
-        for app in list_apps["apps"]:
-            if app["runState"] != "running":
-                message = f"{cloudron_title[i]}\nApplication {app['manifest']['title']} is not running"
-                send_app = send_notification(
-                    bash_command,
-                    message,
-                    str({app["manifest"]["title"]}),
-                    "running status",
-                )
-                count_app["not_running"] += 1
+                    if send_app:
+                        count_app["send"] += 1
+                        if is_debug_mode():
+                            sys.stdout.write(f"\"{message}\"\n")
+                            sys.stdout.flush()
 
-                if send_app:
-                    count_app["send"] += 1
-                    if is_debug_mode():
-                        sys.stdout.write(f"\"{message}\"\n")
-                        sys.stdout.flush()
+                if not app["error"] is None:
+                    message = f"{title}\nApplication {app['manifest']['title']} has an error.\n{app['error']['message']}\nReason: {app['error']['reason']}"
+                    send_app = send_notification(
+                        bash_command,
+                        message,
+                        str({app["manifest"]["title"]}),
+                        "error status",
+                    )
+                    count_app["error"] += 1
 
-            if not app["error"] is None:
-                message = f"{cloudron_title[i]}\nApplication {app['manifest']['title']} has an error:\nError: {app['error']['message']}\nReason: {app['error']['reason']}"
-                send_app = send_notification(
-                    bash_command,
-                    message,
-                    str({app["manifest"]["title"]}),
-                    "error status",
-                )
-                count_app["error"] += 1
-
-                if send_app:
-                    count_app["send"] += 1
-                    if is_debug_mode():
-                        sys.stdout.write(f"\"{message}\"\n")
-                        sys.stdout.flush()
+                    if send_app:
+                        count_app["send"] += 1
+                        if is_debug_mode():
+                            sys.stdout.write(f"\"{message}\"\n")
+                            sys.stdout.flush()
 
         ending = {
             "app": "s status have" if len(list_apps["apps"]) > 1 else " status has",
             "err": "s" if count_app["error"] > 1 else "",
             "run": "s are" if count_app["not_running"] > 1 else " is",
-            "send": "s were" if count_app["send"] > 1 else " was",
+            "send": "s" if count_app["send"] > 1 else "",
         }
 
         sys.stdout.write(
             f"{len(list_apps['apps'])} application{ending['app']} been checked: {count_app['error']} app{ending['err']} with "
-            f"error, {count_app['not_running']} app{ending['run']} not working, {count_app['send']} error{ending['send']} successfully sent.\n"
+            f"error, {count_app['not_running']} app{ending['run']} not working. {count_app['send']} error{ending['send']} successfully sent.\n"
         )
         sys.stdout.flush()
 
-        list_notifications = get_cloudron_notifications(
-            cloudron_domain[i], cloudron_api_key[i]
-        )
+        list_notifications = get_cloudron_notifications(cloudron_instance)
         count_notif = {"unread": 0, "send": 0}
 
-        if list_notifications == []:
-            continue
+        if list_notifications != []:
+            for notification in list_notifications:
+                if not notification["acknowledged"]:
+                    count_notif["unread"] += 1
+                    message = f"{title}\n" + message_update_template(
+                        message_template, notification
+                    )
+                    send_status = send_notification(
+                        bash_command, message, notification["id"]
+                    )
 
-        for notification in list_notifications:
-            if not notification["acknowledged"]:
-                count_notif["unread"] += 1
-                message = f"{cloudron_title[i]}\n" + message_update_template(
-                    message_template, notification
-                )
-                send_status = send_notification(
-                    bash_command, message, notification["id"]
-                )
-
-                if send_status:
-                    count_notif["send"] += 1
-                    if is_debug_mode():
-                        sys.stdout.write(f"{notification}\n")
-                        sys.stdout.flush()
-                    mark_notification_as_acknowledged(cloudron_domain[i], cloudron_api_key[i], notification['id'])
+                    if send_status:
+                        count_notif["send"] += 1
+                        if is_debug_mode():
+                            sys.stdout.write(f"{notification}\n")
+                            sys.stdout.flush()
+                        mark_notification_as_acknowledged(cloudron_instance[0], cloudron_instance[1], notification['id'])
 
         ending_n = {
             "notif": "s have" if len(list_notifications) > 1 else " has",
             "unread": "s" if count_notif["unread"] > 1 else "",
-            "send": "s were" if count_notif["send"] > 1 else " was",
+            "send": "s" if count_notif["send"] > 1 else "",
         }
         sys.stdout.write(
             f"{len(list_notifications)} notification{ending_n['notif']} been checked: {count_notif['unread']} notification{ending_n['unread']} unread, {count_notif['send']} notification{ending_n['send']} successfully sent.\n"
