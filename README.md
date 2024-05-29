@@ -19,3 +19,8 @@ An example crontab entry:
 ```crontab
 */5 * * * * python3 /.../CloudronWatcher/run.sh
 ```
+
+Update code to the latest version:
+```bash
+cp settings.ini /tmp/ && git pull && cp /tmp/settings.ini ./
+```
