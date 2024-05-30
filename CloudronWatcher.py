@@ -47,7 +47,7 @@ def is_debug_mode() -> bool:
     return '--debug' in sys.argv
 
 
-def get_config():
+def get_config() -> tuple:
     """
     Retrieves configuration settings from the settings.ini file.
 
@@ -60,9 +60,7 @@ def get_config():
 
     Returns:
         tuple: A tuple containing the following elements:
-        - cloudron_title (list): A list of titles for each Cloudron instance.
-        - cloudron_domain (list): A list of domains for each Cloudron instance.
-        - cloudron_api_key (list): A list of API tokens for each Cloudron instance.
+        - cloudron_instances
         - bash_command (str): The command used to send notifications.
         - message_template (str): The template for the notification messages.
     """
@@ -75,17 +73,17 @@ def get_config():
 
     try:
         config.read("settings.ini")
-        bash_command = config["NOTIFICATION"]["NOTIFICATION_CMD"]
-        message_template = config["NOTIFICATION"]["NOTIFICATION_TEMPLATE"]
+        bash_command_conf = config["NOTIFICATION"]["NOTIFICATION_CMD"]
+        message_template_conf = config["NOTIFICATION"]["NOTIFICATION_TEMPLATE"]
 
-        if bash_command == '':
+        if bash_command_conf == '':
             sys.stderr.write(
                 f"\033[mConfiguration error: Check the environment variables: NOTIFICATION_CMD.\033[0m\n"
             )
             sys.stderr.flush()
             exit(1)
 
-        if message_template == '':
+        if message_template_conf == '':
             sys.stderr.write(
                 f"\033[mConfiguration error: Check the environment variables: NOTIFICATION_TEMPLATE.\033[0m\n"
             )
@@ -99,7 +97,7 @@ def get_config():
         sys.stderr.flush()
         exit(1)
 
-    cloudron_instances = {}
+    cloudron_instances_conf = {}
 
     for section in config.sections():
         for key in config[section]:
@@ -112,8 +110,8 @@ def get_config():
                         )
                         sys.stderr.flush()
                     else:
-                        cloudron_instances[section] = [config[section]["CLOUDRON_DOMAIN"],
-                                                       config[section]["CLOUDRON_TOKEN"]]
+                        cloudron_instances_conf[section] = [config[section]["CLOUDRON_DOMAIN"],
+                                                            config[section]["CLOUDRON_TOKEN"]]
                 except KeyError as e:
                     sys.stderr.write(
                         f"\033[mConfiguration error: Check the environment variables: {e}.\033[0m\n"
@@ -122,18 +120,18 @@ def get_config():
                     exit(1)
 
     return (
-        cloudron_instances,
-        bash_command,
-        message_template,
+        cloudron_instances_conf,
+        bash_command_conf,
+        message_template_conf,
     )
 
 
-def get_cloudron_notifications(cloudron_instance: list) -> list:
+def get_cloudron_notifications(cloudron_instance_get: list) -> list:
     """
     Fetches a list of notifications from the Cloudron API.
 
     Parameters:
-    - cloudron_instance: Pair (domain, api-key).
+    - cloudron_instance_get: Pair (domain, api-key).
 
     Returns:
     - list: A list of notifications in JSON format, obtained from the Cloudron API. The list is sorted by the 'creationTime' attribute of each notification.
@@ -141,9 +139,8 @@ def get_cloudron_notifications(cloudron_instance: list) -> list:
     Raises:
     - requests.exceptions.RequestException: If there is an error with the request to the Cloudron API.
     """
-
-    headers = {"Authorization": f"Bearer {cloudron_instance[1]}"}
-    url = f"https://{cloudron_instance[0]}/api/v1/notifications"
+    headers = {"Authorization": f"Bearer {cloudron_instance_get[1]}"}
+    url = f"https://{cloudron_instance_get[0]}/api/v1/notifications"
 
     try:
         response = requests.get(url, headers=headers)
@@ -157,7 +154,7 @@ def get_cloudron_notifications(cloudron_instance: list) -> list:
     return sorted(response.json()["notifications"], key=lambda x: x["creationTime"])
 
 
-def get_apps(cloudron_instance: list) -> list:
+def get_apps(cloudron_instance_get: list) -> list:
     """
     Retrieves a list of applications from the Cloudron API.
 
@@ -170,8 +167,8 @@ def get_apps(cloudron_instance: list) -> list:
     Raises:
     - requests.exceptions.RequestException: If there is an error with the request to the Cloudron API.
     """
-    url = f"https://{cloudron_instance[0]}/api/v1/apps"
-    headers = {"Authorization": f"Bearer {cloudron_instance[1]}"}
+    url = f"https://{cloudron_instance_get[0]}/api/v1/apps"
+    headers = {"Authorization": f"Bearer {cloudron_instance_get[1]}"}
 
     try:
         response = requests.get(url, headers=headers)
@@ -187,41 +184,7 @@ def get_apps(cloudron_instance: list) -> list:
     return response.json()
 
 
-def mark_notification_as_acknowledged(cloudron_instance: list, notification_id: str) -> None:
-    """
-    Marks a specific notification as acknowledged in the Cloudron API.
-
-    Parameters:
-    - cloudron_instance: Pair (domain, api-key).
-    - notification_id (str): The unique identifier of the notification to be marked as acknowledged.
-
-    Raises:
-    - requests.exceptions.RequestException: If there is an error with the request to the Cloudron API, such as network issues or invalid credentials.
-    """
-    headers = {"Authorization": f"Bearer {cloudron_instance[1]}"}
-    data = {"acknowledged": True}
-
-    url = f"https://{cloudron_instance[0]}/api/v1/notifications/{notification_id}"
-
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()
-
-    except requests.exceptions.RequestException as e:
-        sys.stderr.write(
-            f"\033[mError when marking a notification as read: {e}.\033[0m"
-        )
-        sys.stderr.flush()
-        return
-
-    sys.stdout.write(
-        f"\033[92mNotifications #{notification_id} have been successfully marked as read.\033[0m\n"
-    )
-    sys.stdout.flush()
-    return
-
-
-def message_update_template(message_template: str, notification) -> str:
+def message_update_template(message_template_up: str, notification) -> str:
     """
     Updates a message template with specific notification details.
 
@@ -232,7 +195,7 @@ def message_update_template(message_template: str, notification) -> str:
     Returns:
     - str: The updated message string with all placeholders replaced by the actual notification details.
     """
-    message_content = message_template.replace("{id}", notification["id"])
+    message_content = message_template_up.replace("{id}", notification["id"])
     message_content = message_content.replace("{title}", notification["title"])
     message_content = message_content.replace(
         "{creationTime}",
@@ -244,7 +207,7 @@ def message_update_template(message_template: str, notification) -> str:
     return message_content
 
 
-def curl_handler(process: subprocess.CompletedProcess, id: str, message_type: str = "notification") -> bool:
+def curl_handler(process_curl: subprocess.CompletedProcess, id_notif: str, message_type: str = "notification") -> bool:
     """
     Handles the response from the messaging service when using cURL for sending messages.
 
@@ -252,45 +215,60 @@ def curl_handler(process: subprocess.CompletedProcess, id: str, message_type: st
     If the message was sent successfully, it prints a success message to stdout. In case of an error, it prints an error message to stderr.
 
     Parameters:
-    - process (subprocess.CompletedProcess): The completed process object returned by the subprocess call.
-    - id (str): The notification number or application name
+    - process_curl (subprocess.CompletedProcess): The completed process object returned by the subprocess call.
+    - id_notif (str): The notification number or application name
     - message_type (str): The type of message being sent. Defaults to "notification".
 
     Returns:
     - bool: True if the message was sent successfully, False otherwise.
     """
+    if process_curl.returncode != 0:
+        sys.stderr.write(
+            f"\033[mInformation about {message_type} ({id_notif}) was not sent successfully.\n{process_curl.stdout}"
+            f"\033[0m\n"
+        )
+        sys.stderr.flush()
+        return False
+
     try:
-        json_data = json.loads(process.stdout)
+        json_data_result = json.loads(process_curl.stdout)
 
-        sys.stdout.write(json.dumps(json_data, indent=4))
-        sys.stdout.flush()
-
-        if json_data["ok"]:
+        if json_data_result["ok"]:
             if message_type == "notification":
                 sys.stdout.write(
-                    f"\033[92mThe notification #{id} has been sent successfully.\033[0m\n"
+                    f"\033[92mThe notification #{id_notif} has been sent successfully.\033[0m\n"
                 )
             elif message_type == "running status":
                 sys.stdout.write(
-                    f"\033[92mInformation about {id} not running has been sent successfully.\033[0m\n"
+                    f"\033[92mInformation about {id_notif} not running has been sent successfully.\033[0m\n"
                 )
             elif message_type == "error status":
                 sys.stdout.write(
-                    f"\033[92mInformation about {id}'s error has been successfully sent.\033[0m\n"
+                    f"\033[92mInformation about {id_notif}'s error has been successfully sent.\033[0m\n"
                 )
 
             sys.stdout.flush()
 
         else:
             sys.stderr.write(
-                f"\033[mInformation about {message_type} ({id}) was not sent successfully.\n{process.stdout}\033[0m\n"
+                f"\033[mInformation about {message_type} ({id_notif}) was not sent successfully.\n{process_curl.stdout}"
+                f"\033[0m\n"
             )
             sys.stderr.flush()
             return False
 
     except json.JSONDecodeError:
         sys.stderr.write(
-            f"\033[mInformation about {message_type} ({id}) was not sent successfully: NOTIFICATION_CMD error: Check the curl cmd.\033[0m\n"
+            f"\033[mInformation about {message_type} ({id_notif}) was not sent successfully: NOTIFICATION_CMD error: "
+            f"Check the curl cmd.\033[0m\n"
+        )
+        sys.stderr.flush()
+        return False
+
+    except KeyError as e:
+        sys.stderr.write(
+            f"\033[mInformation about {message_type} ({id_notif}) was not sent successfully: {e}\n.\033[0m\n"
+            f"{json.dumps(json_data_result, indent=4)}\n"
         )
         sys.stderr.flush()
         return False
@@ -298,12 +276,14 @@ def curl_handler(process: subprocess.CompletedProcess, id: str, message_type: st
     return True
 
 
-def not_curl_handler(process: subprocess.CompletedProcess, id: str, message_type: str = "notification") -> bool:
+def not_curl_handler(process_not_curl: subprocess.CompletedProcess, id_notif: str,
+                     message_type: str = "notification") -> bool:
     """
     Handles the response from the messaging service when not using cURL for sending messages.
 
-    This function processes the output of a subprocess call that sends a message without using cURL. It checks the return code of the subprocess call to determine if the message was sent successfully.
-    If the message was sent successfully, it prints a success message to stdout. In case of an error, it prints an error message to stderr.
+    This function processes the output of a subprocess call that sends a message without using cURL. It checks the
+    return code of the subprocess call to determine if the message was sent successfully. If the message was sent
+    successfully, it prints a success message to stdout. In case of an error, it prints an error message to stderr.
 
     Parameters:
     - process (subprocess.CompletedProcess): The completed process object returned by the subprocess call.
@@ -313,51 +293,55 @@ def not_curl_handler(process: subprocess.CompletedProcess, id: str, message_type
     Returns:
     - bool: True if the message was sent successfully, False otherwise.
     """
-    if process.returncode == 0:
-        if message_type == "notification":
-            sys.stdout.write(
-                f"\033[92mThe notification #{id} has been sent successfully.\033[0m\n"
-            )
-        elif message_type == "running status":
-            sys.stdout.write(
-                f"\033[92mInformation about {id} not running has been sent successfully.\033[0m\n"
-            )
-        elif message_type == "error status":
-            sys.stdout.write(
-                f"\033[92mInformation about {id}'s error has been successfully sent.\033[0m\n"
-            )
-
-        sys.stdout.flush()
-        return True
-
-    else:
+    if process_not_curl.returncode != 0:
         sys.stderr.write(
-            f"\033[mInformation about {message_type} ({id}) was not sent successfully.\n{process.stderr}\033[0m\n"
+            f"\033[mInformation about {message_type} ({id_notif}) was not sent successfully.\n{process_not_curl.stderr}\033[0m\n"
         )
         sys.stderr.flush()
         return False
 
+    if message_type == "notification":
+        sys.stdout.write(
+            f"\033[92mThe notification #{id_notif} has been sent successfully.\033[0m\n"
+        )
+    elif message_type == "running status":
+        sys.stdout.write(
+            f"\033[92mInformation about {id_notif} not running has been sent successfully.\033[0m\n"
+        )
+    elif message_type == "error status":
+        sys.stdout.write(
+            f"\033[92mInformation about {id_notif}'s error has been successfully sent.\033[0m\n"
+        )
 
-def send_notification(bash_command: str, message: str, id: str, message_type: str = "notification") -> bool:
+    sys.stdout.flush()
+    return True
+
+
+def send_notification(bash_command_send: str, message: str, id_notif: str, message_type: str = "notification") -> bool:
     """
     Sends a notification message using a specified command.
 
-    This function prepares a notification message based on the provided template and details, then executes a command to send the message.
-    The function supports both cURL commands and other shell commands. It checks if the command includes "curl" to determine the appropriate handler for processing the command's response.
+    This function prepares a notification message based on the provided template and details, then executes a command
+    to send the message. The function supports both cURL commands and other shell commands. It checks if the command
+    includes "curl" to determine the appropriate handler for processing the command's response.
 
     Parameters:
-    - bash_command (str): The shell command to execute for sending the notification. It should include placeholders for the message content, such as "{MESSAGE}".
-    - message (str): The notification message to be sent. It will replace the "{MESSAGE}" placeholder in the bash_command.
-    - id (str): The notification number or application name, used for logging and error handling.
-    - message_type (str): The type of message being sent. Defaults to "notification". It's used for logging and error handling.
+    - bash_command (str): The shell command to execute for sending the notification. It should include
+    placeholders for the message content, such as "{MESSAGE}".
+    - message (str): The notification message to be sent.
+    It will replace the "{MESSAGE}" placeholder in the bash_command.
+    - id (str): The notification number or
+    application name, used for logging and error handling.
+    - message_type (str): The type of message being sent.
+    Defaults to "notification". It's used for logging and error handling.
 
-    Returns:
-    - bool: True if the notification was sent successfully, False otherwise. The success of the operation is determined by the response from the executed command.
+    Returns: - bool: True if the notification was sent successfully, False otherwise. The success of the operation is
+    determined by the response from the executed command.
     """
-    if "curl" in bash_command:
-        bash_command_message = bash_command.replace("{MESSAGE}", quote(message))
+    if "curl" in bash_command_send:
+        bash_command_message = bash_command_send.replace("{MESSAGE}", quote(message))
     else:
-        bash_command_message = bash_command.replace(
+        bash_command_message = bash_command_send.replace(
             "{MESSAGE}", message.replace("`", "\`")
         )
 
@@ -366,10 +350,44 @@ def send_notification(bash_command: str, message: str, id: str, message_type: st
     )
 
     return (
-        curl_handler(process, id.strip("{'}"), message_type)
-        if "curl" in bash_command
-        else not_curl_handler(process, id.strip("{'}"), message_type)
+        curl_handler(process, id_notif.strip("{'}"), message_type)
+        if "curl" in bash_command_send
+        else not_curl_handler(process, id_notif.strip("{'}"), message_type)
     )
+
+
+def mark_notification_as_acknowledged(cloudron_instance_mark: list, id_notif: str) -> None:
+    """
+    Marks a specific notification as acknowledged in the Cloudron API.
+
+    Parameters:
+    - cloudron_instance_mark: Pair (domain, api-key).
+    - notification_id (str): The unique identifier of the notification to be marked as acknowledged.
+
+    Raises: - requests.exceptions.RequestException: If there is an error with the request to the Cloudron API,
+    such as network issues or invalid credentials.
+    """
+    headers = {"Authorization": f"Bearer {cloudron_instance_mark[1]}"}
+    data = {"acknowledged": True}
+
+    url = f"https://{cloudron_instance_mark[0]}/api/v1/notifications/{id_notif}"
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+
+    except requests.exceptions.RequestException as e:
+        sys.stderr.write(
+            f"\033[mError: marking a notification as read: {e}.\033[0m"
+        )
+        sys.stderr.flush()
+        return
+
+    sys.stdout.write(
+        f"\033[92mNotifications #{id_notif} have been successfully marked as read.\033[0m\n"
+    )
+    sys.stdout.flush()
+    return
 
 
 if __name__ == '__main__':
@@ -389,8 +407,8 @@ if __name__ == '__main__':
 
         count_app = {"error": 0, "not_running": 0, "send": 0}
 
-        if list_apps != []:
-            for app in list_apps["apps"]:
+        if list_apps:
+            for app in list_apps['apps']:
                 if app["runState"] != "running":
                     message = f"{title}\nApplication {app['manifest']['title']} is not running"
                     send_app = send_notification(
@@ -423,23 +441,16 @@ if __name__ == '__main__':
                             sys.stdout.write(f"\"{message}\"\n")
                             sys.stdout.flush()
 
-        ending = {
-            "app": "s status have" if len(list_apps["apps"]) > 1 else " status has",
-            "err": "s" if count_app["error"] > 1 else "",
-            "run": "s are" if count_app["not_running"] > 1 else " is",
-            "send": "s" if count_app["send"] > 1 else "",
-        }
-
         sys.stdout.write(
-            f"{len(list_apps['apps'])} application{ending['app']} been checked: {count_app['error']} app{ending['err']} with "
-            f"error, {count_app['not_running']} app{ending['run']} not working. {count_app['send']} error{ending['send']} successfully sent.\n"
+            f"Applications:\n\tChecked: {len(list_apps['apps'])}\n\tError: {count_app['error']}\n\tNot working: "
+            f"{count_app['not_running']}\n\tSent successfully: {count_app['send']}\n"
         )
         sys.stdout.flush()
 
         list_notifications = get_cloudron_notifications(cloudron_instance)
         count_notif = {"unread": 0, "send": 0}
 
-        if list_notifications != []:
+        if list_notifications:
             for notification in list_notifications:
                 if not notification["acknowledged"]:
                     count_notif["unread"] += 1
@@ -455,14 +466,9 @@ if __name__ == '__main__':
                         if is_debug_mode():
                             sys.stdout.write(f"{notification}\n")
                             sys.stdout.flush()
-                        mark_notification_as_acknowledged(cloudron_instance[0], cloudron_instance[1], notification['id'])
+                        mark_notification_as_acknowledged(cloudron_instance, notification["id"])
 
-        ending_n = {
-            "notif": "s have" if len(list_notifications) > 1 else " has",
-            "unread": "s" if count_notif["unread"] > 1 else "",
-            "send": "s" if count_notif["send"] > 1 else "",
-        }
         sys.stdout.write(
-            f"{len(list_notifications)} notification{ending_n['notif']} been checked: {count_notif['unread']} notification{ending_n['unread']} unread, {count_notif['send']} notification{ending_n['send']} successfully sent.\n"
-        )
+            f"Notifications:\n\tChecked: {len(list_notifications)}\n\tUnread: {count_notif['unread']}\n\t"
+            f"Sent successfully: {count_notif['send']}\n")
         sys.stdout.flush()
