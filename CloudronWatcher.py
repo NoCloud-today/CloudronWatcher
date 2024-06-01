@@ -205,15 +205,6 @@ def message_update_template(message_template_up: str, notification) -> str:
     return message_content
 
 
-def escape_markdown(text: str) -> str:
-    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '+', '-', '.', '!']
-
-    for char in special_chars:
-        text = text.replace(char, '\\' + char)
-
-    return text
-
-
 def send_notification(bash_command_send: str, message_send: str, id_notif: str,
                       message_type: str = "notification") -> bool:
     """
@@ -232,8 +223,7 @@ def send_notification(bash_command_send: str, message_send: str, id_notif: str,
     Returns: - bool: True if the notification was sent successfully, False otherwise. The success of the operation is
     determined by the return code from the executed command.
     """
-    message_send = escape_markdown(message_send)
-    bash_command_message = bash_command_send.replace("{MESSAGE}", message_send)
+    bash_command_message = bash_command_send.replace("{MESSAGE}", message_send.replace('`', '\\`'))
 
     process = subprocess.run(
         bash_command_message, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -261,6 +251,7 @@ def send_notification(bash_command_send: str, message_send: str, id_notif: str,
         )
 
     sys.stdout.flush()
+    return True
 
 
 def mark_notification_as_acknowledged(cloudron_instance_mark: list, id_notif: str) -> None:
