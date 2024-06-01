@@ -211,8 +211,9 @@ def curl_handler(process_curl: subprocess.CompletedProcess, id_notif: str, messa
     """
     Handles the response from the messaging service when using cURL for sending messages.
 
-    This function processes the output of a subprocess call that sends a message using cURL. It checks if the message was sent successfully by parsing the JSON response.
-    If the message was sent successfully, it prints a success message to stdout. In case of an error, it prints an error message to stderr.
+    This function processes the output of a subprocess call that sends a message using cURL. It checks if the message
+    was sent successfully by parsing the JSON response. If the message was sent successfully, it prints a success
+    message to stdout. In case of an error, it prints an error message to stderr.
 
     Parameters:
     - process_curl (subprocess.CompletedProcess): The completed process object returned by the subprocess call.
@@ -230,48 +231,24 @@ def curl_handler(process_curl: subprocess.CompletedProcess, id_notif: str, messa
         sys.stderr.flush()
         return False
 
-    try:
-        json_data_result = json.loads(process_curl.stdout)
-
-        if json_data_result["ok"]:
-            if message_type == "notification":
-                sys.stdout.write(
-                    f"\033[92mThe notification #{id_notif} has been sent successfully.\033[0m\n"
-                )
-            elif message_type == "running status":
-                sys.stdout.write(
-                    f"\033[92mInformation about {id_notif} not running has been sent successfully.\033[0m\n"
-                )
-            elif message_type == "error status":
-                sys.stdout.write(
-                    f"\033[92mInformation about {id_notif}'s error has been successfully sent.\033[0m\n"
-                )
-
-            sys.stdout.flush()
-
-        else:
-            sys.stderr.write(
-                f"\033[mInformation about {message_type} ({id_notif}) was not sent successfully.\n{process_curl.stdout}"
-                f"\033[0m\n"
-            )
-            sys.stderr.flush()
-            return False
-
-    except json.JSONDecodeError:
-        sys.stderr.write(
-            f"\033[mInformation about {message_type} ({id_notif}) was not sent successfully: NOTIFICATION_CMD error: "
-            f"Check the curl cmd.\033[0m\n"
+    if message_type == "notification":
+        sys.stdout.write(
+            f"\033[92mThe notification #{id_notif} has been sent successfully.\033[0m\n"
         )
-        sys.stderr.flush()
-        return False
-
-    except KeyError as e:
-        sys.stderr.write(
-            f"\033[mInformation about {message_type} ({id_notif}) was not sent successfully: {e}\n.\033[0m\n"
-            f"{json.dumps(json_data_result, indent=4)}\n"
+    elif message_type == "running status":
+        sys.stdout.write(
+            f"\033[92mInformation about {id_notif} not running has been sent successfully.\033[0m\n"
         )
-        sys.stderr.flush()
-        return False
+    elif message_type == "error status":
+        sys.stdout.write(
+            f"\033[92mInformation about {id_notif}'s error has been successfully sent.\033[0m\n"
+        )
+
+    sys.stdout.flush()
+
+    if is_debug_mode():
+        sys.stdout.write(f"{process_curl.stdout}")
+        sys.stdout.flush()
 
     return True
 
