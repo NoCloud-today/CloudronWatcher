@@ -100,24 +100,22 @@ def get_config() -> tuple:
     cloudron_instances_conf = {}
 
     for section in config.sections():
-        for key in config[section]:
-            if key.startswith("cloudron_domain"):
-                try:
-                    if config[section]["CLOUDRON_DOMAIN"] == '' or config[section]["CLOUDRON_TOKEN"] == '':
-                        sys.stderr.write(
-                            f"\033[33mWarning: The environment variable of {section} is empty. It will be "
-                            f"skipped.\033[0m\n"
-                        )
-                        sys.stderr.flush()
-                    else:
-                        cloudron_instances_conf[section] = [config[section]["CLOUDRON_DOMAIN"],
-                                                            config[section]["CLOUDRON_TOKEN"]]
-                except KeyError as e:
+        if section != 'NOTIFICATION':
+            try:
+                if config[section]["CLOUDRON_DOMAIN"] == '' or config[section]["CLOUDRON_TOKEN"] == '':
                     sys.stderr.write(
-                        f"\033[mConfiguration error: Check the environment variables: {e}.\033[0m\n"
+                        f"\033[33mWarning: The environment variable of {section} is empty. It will be "
+                        f"skipped.\033[0m\n"
                     )
                     sys.stderr.flush()
-                    exit(1)
+                else:
+                    cloudron_instances_conf[section] = [config[section]["CLOUDRON_DOMAIN"],
+                                                        config[section]["CLOUDRON_TOKEN"]]
+            except KeyError as e:
+                sys.stderr.write(
+                    f"\033[33mWarning: The environment variable of {section}: No {e} It will be skipped.\033[0m\n"
+                )
+                sys.stderr.flush()
 
     return (
         cloudron_instances_conf,
