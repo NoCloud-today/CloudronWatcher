@@ -205,25 +205,35 @@ def message_update_template(message_template_up: str, notification) -> str:
     return message_content
 
 
-def curl_handler(process_curl: subprocess.CompletedProcess, id_notif: str, message_type: str = "notification") -> bool:
+def send_notification(bash_command_send: str, message_send: str, id_notif: str,
+                      message_type: str = "notification") -> bool:
     """
-    Handles the response from the messaging service when using cURL for sending messages.
-
-    This function processes the output of a subprocess call that sends a message using cURL. It checks if the message
-    was sent successfully by parsing the JSON response. If the message was sent successfully, it prints a success
-    message to stdout. In case of an error, it prints an error message to stderr.
+    Sends a notification message using a specified command.
 
     Parameters:
-    - process_curl (subprocess.CompletedProcess): The completed process object returned by the subprocess call.
-    - id_notif (str): The notification number or application name
-    - message_type (str): The type of message being sent. Defaults to "notification".
+    - bash_command_send (str): The shell command to execute for sending the notification. It should include
+    placeholders for the message content, such as "{MESSAGE}".
+    - message_send (str): The notification message to be sent.
+    It will replace the "{MESSAGE}" placeholder in the bash_command.
+    - id_notif (str): The notification number or
+    application name, used for logging and error handling.
+    - message_type (str): The type of message being sent.
+    Defaults to "notification". It's used for logging and error handling.
 
-    Returns:
-    - bool: True if the message was sent successfully, False otherwise.
+    Returns: - bool: True if the notification was sent successfully, False otherwise. The success of the operation is
+    determined by the return code from the executed command.
     """
-    if process_curl.returncode != 0:
+    bash_command_message = bash_command_send.replace(
+        "{MESSAGE}", message_send.replace("`", "\`")
+    )
+
+    process = subprocess.run(
+        bash_command_message, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+
+    if process.returncode != 0:
         sys.stderr.write(
-            f"\033[mInformation about {message_type} ({id_notif}) was not sent successfully.\n{process_curl.stdout}"
+            f"\033[mInformation about {message_type} {id_notif} was not sent successfully.\n{process.stderr}"
             f"\033[0m\n"
         )
         sys.stderr.flush()
@@ -235,100 +245,14 @@ def curl_handler(process_curl: subprocess.CompletedProcess, id_notif: str, messa
         )
     elif message_type == "running status":
         sys.stdout.write(
-            f"\033[92mInformation about {id_notif} not running has been sent successfully.\033[0m\n"
+            f"\033[92mInformation about {id_notif} (not running) has been sent successfully.\033[0m\n"
         )
     elif message_type == "error status":
         sys.stdout.write(
-            f"\033[92mInformation about {id_notif}'s error has been successfully sent.\033[0m\n"
+            f"\033[92mInformation about {id_notif} error has been successfully sent.\033[0m\n"
         )
 
     sys.stdout.flush()
-
-    if is_debug_mode():
-        sys.stdout.write(f"{process_curl.stdout}")
-        sys.stdout.flush()
-
-    return True
-
-
-def not_curl_handler(process_not_curl: subprocess.CompletedProcess, id_notif: str,
-                     message_type: str = "notification") -> bool:
-    """
-    Handles the response from the messaging service when not using cURL for sending messages.
-
-    This function processes the output of a subprocess call that sends a message without using cURL. It checks the
-    return code of the subprocess call to determine if the message was sent successfully. If the message was sent
-    successfully, it prints a success message to stdout. In case of an error, it prints an error message to stderr.
-
-    Parameters:
-    - process (subprocess.CompletedProcess): The completed process object returned by the subprocess call.
-    - id (str): The notification number or application name
-    - message_type (str): The type of message being sent. Defaults to "notification".
-
-    Returns:
-    - bool: True if the message was sent successfully, False otherwise.
-    """
-    if process_not_curl.returncode != 0:
-        sys.stderr.write(
-            f"\033[mInformation about {message_type} ({id_notif}) was not sent successfully.\n{process_not_curl.stderr}\033[0m\n"
-        )
-        sys.stderr.flush()
-        return False
-
-    if message_type == "notification":
-        sys.stdout.write(
-            f"\033[92mThe notification #{id_notif} has been sent successfully.\033[0m\n"
-        )
-    elif message_type == "running status":
-        sys.stdout.write(
-            f"\033[92mInformation about {id_notif} not running has been sent successfully.\033[0m\n"
-        )
-    elif message_type == "error status":
-        sys.stdout.write(
-            f"\033[92mInformation about {id_notif}'s error has been successfully sent.\033[0m\n"
-        )
-
-    sys.stdout.flush()
-    return True
-
-
-def send_notification(bash_command_send: str, message: str, id_notif: str, message_type: str = "notification") -> bool:
-    """
-    Sends a notification message using a specified command.
-
-    This function prepares a notification message based on the provided template and details, then executes a command
-    to send the message. The function supports both cURL commands and other shell commands. It checks if the command
-    includes "curl" to determine the appropriate handler for processing the command's response.
-
-    Parameters:
-    - bash_command (str): The shell command to execute for sending the notification. It should include
-    placeholders for the message content, such as "{MESSAGE}".
-    - message (str): The notification message to be sent.
-    It will replace the "{MESSAGE}" placeholder in the bash_command.
-    - id (str): The notification number or
-    application name, used for logging and error handling.
-    - message_type (str): The type of message being sent.
-    Defaults to "notification". It's used for logging and error handling.
-
-    Returns: - bool: True if the notification was sent successfully, False otherwise. The success of the operation is
-    determined by the response from the executed command.
-    """
-    if "curl" in bash_command_send:
-        bash_command_message = bash_command_send.replace("{MESSAGE}", quote(message))
-    else:
-        bash_command_message = bash_command_send.replace(
-            "{MESSAGE}", message.replace("`", "\`")
-        )
-
-    process = subprocess.run(
-        bash_command_message, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-
-    return (
-        curl_handler(process, id_notif.strip("{'}"), message_type)
-        if "curl" in bash_command_send
-        else not_curl_handler(process, id_notif.strip("{'}"), message_type)
-    )
 
 
 def mark_notification_as_acknowledged(cloudron_instance_mark: list, id_notif: str) -> None:
