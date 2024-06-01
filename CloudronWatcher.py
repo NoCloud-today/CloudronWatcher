@@ -223,7 +223,7 @@ def send_notification(bash_command_send: str, message_send: str, id_notif: str,
     Returns: - bool: True if the notification was sent successfully, False otherwise. The success of the operation is
     determined by the return code from the executed command.
     """
-    bash_command_message = bash_command_send.replace("{MESSAGE}", message_send.replace('`', '\\`'))
+    bash_command_message = bash_command_send.replace("{MESSAGE}", message_send.replace('`', '\\`').replace('"', '\\"'))
 
     process = subprocess.run(
         bash_command_message, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
