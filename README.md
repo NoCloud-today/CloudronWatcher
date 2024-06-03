@@ -17,7 +17,7 @@ vi settings.ini
 
 An example crontab entry:
 ```crontab
-*/5 * * * * python3 /.../CloudronWatcher/run.sh
+0 * * * * /.../CloudronWatcher/run.sh
 ```
 
 Update code to the latest version:
