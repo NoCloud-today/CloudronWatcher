@@ -1,11 +1,9 @@
 import configparser
 import shlex
-import json
 import os
 import subprocess
 import sys
 import requests
-from urllib.parse import quote
 from datetime import datetime
 
 
@@ -97,7 +95,6 @@ def get_config() -> tuple:
 
 
 def get_cloudron_notifications(cloudron_instance_get: list) -> list:
-
     headers = {"Authorization": f"Bearer {cloudron_instance_get[1]}"}
     url = f"https://{cloudron_instance_get[0]}/api/v1/notifications"
 
@@ -114,7 +111,6 @@ def get_cloudron_notifications(cloudron_instance_get: list) -> list:
 
 
 def get_apps(cloudron_instance_get: list) -> list:
-
     url = f"https://{cloudron_instance_get[0]}/api/v1/apps"
     headers = {"Authorization": f"Bearer {cloudron_instance_get[1]}"}
 
@@ -157,9 +153,8 @@ def message_update_template(message_template_up: str, notification) -> str:
 
 def send_notification(bash_cmd_line: str, message_to_deliver: str, id_notif: str,
                       message_type: str = "notification") -> bool:
-    
     message_to_deliver = shlex.quote(message_to_deliver)
-    message_to_deliver = message_to_deliver [1:-1] # removes first and last quotes (')
+    message_to_deliver = message_to_deliver[1:-1]  # removes first and last quotes (')
     html_message_to_deliver = '<br/>'.join(message_to_deliver.splitlines())
 
     bash_cmd_line = bash_cmd_line.replace("{MESSAGE}", message_to_deliver)
@@ -178,7 +173,8 @@ def send_notification(bash_cmd_line: str, message_to_deliver: str, id_notif: str
             f"\033[0m\n"
         )
         sys.stderr.flush()
- 
+        return False
+
     sys.stdout.write(
         f"\033[92m\nEvent #{id_notif} has been sent successfully.\033[0m\n"
     )
@@ -187,7 +183,6 @@ def send_notification(bash_cmd_line: str, message_to_deliver: str, id_notif: str
 
 
 def mark_notification_as_acknowledged(cloudron_instance_mark: list, id_notif: str) -> None:
-
     headers = {"Authorization": f"Bearer {cloudron_instance_mark[1]}"}
     data = {"acknowledged": True}
 
